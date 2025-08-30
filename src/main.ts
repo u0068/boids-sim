@@ -61,6 +61,35 @@ const canvasSizeBuffer = device.createBuffer({
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 });
 
+// mouse state
+let mouseInput = { x: 0, y: 0, left: false, right: false };
+
+canvas.addEventListener("mousemove", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  mouseInput.x = e.clientX - rect.left;
+  mouseInput.y = e.clientY - rect.top;
+});
+
+canvas.addEventListener("mousedown", (e) => {
+  if (e.button === 0) mouseInput.left = true;   // left click
+  if (e.button === 2) mouseInput.right = true;  // right click
+});
+
+canvas.addEventListener("mouseup", (e) => {
+  if (e.button === 0) mouseInput.left = false;
+  if (e.button === 2) mouseInput.right = false;
+});
+
+// prevent context menu on right click
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+const mouseArray = new Float32Array([mouseInput.x, mouseInput.y, mouseInput.left ? 1 : 0, mouseInput.right ? 1 : 0]);
+const mouseInputBuffer = device.createBuffer({
+    label: "Mouse input uniform",
+    size: mouseArray.byteLength,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+});
+
 // Resize the canvas to fill the window and update the context.
 function resizeCanvas() {
   canvas.width = window.innerWidth;
@@ -83,6 +112,8 @@ function getBoidParams() {
         alignmentRange: parseFloat((document.getElementById('aliRange') as HTMLInputElement).value),
         shapeWeight: parseFloat((document.getElementById('shapeWeight') as HTMLInputElement).value),
         shapeRange: parseFloat((document.getElementById('shapeRange') as HTMLInputElement).value),
+        mouseWeight: parseFloat((document.getElementById('mouseWeight') as HTMLInputElement).value),
+        mouseRange: parseFloat((document.getElementById('mouseRange') as HTMLInputElement).value),
     };
 }
 
@@ -98,17 +129,21 @@ function getBoidParamsArray() {
         p.alignmentRange,
         p.shapeWeight,
         p.shapeRange,
+        p.mouseWeight,
+        p.mouseRange,
+        0, 0 // padding
     ]);
 }
 
 const paramsBuffer = device.createBuffer({
-    size: 8 * 4,
+    label: "Boid parameters uniform",
+    size: getBoidParamsArray().byteLength,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 });
 device.queue.writeBuffer(paramsBuffer, 0, getBoidParamsArray());
 
 // Optional: update displayed values live
-['sepWeight','sepRange','cohWeight','cohRange','aliWeight','aliRange', 'shapeWeight', 'shapeRange'].forEach(id => {
+['sepWeight','sepRange','cohWeight','cohRange','aliWeight','aliRange', 'shapeWeight', 'shapeRange', 'mouseWeight', 'mouseRange'].forEach(id => {
     const input = document.getElementById(id) as HTMLInputElement;
     const span = document.getElementById(id+'Val') as HTMLElement;
     input.addEventListener('input', () => { span.textContent = input.value; });
@@ -158,6 +193,7 @@ const computeBindGroupLayout = device.createBindGroupLayout({
         { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
         { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
         { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
+        { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
     ]
 });
 
@@ -181,6 +217,7 @@ const boidComputeBindGroup = device.createBindGroup({
         { binding: 0, resource: { buffer: boidStorageBuffer } },
         { binding: 1, resource: { buffer: canvasSizeBuffer } },
         { binding: 2, resource: { buffer: paramsBuffer } },
+        { binding: 3, resource: { buffer: mouseInputBuffer } },
     ]
 });
 
@@ -232,6 +269,12 @@ function frame() {
 
     // --- UPDATE PARAMS BUFFER EVERY FRAME ---
     device.queue.writeBuffer(paramsBuffer, 0, getBoidParamsArray());
+    // --- UPDATE MOUSE BUFFER EVERY FRAME ---
+    mouseArray[0] = mouseInput.x;
+    mouseArray[1] = mouseInput.y;
+    mouseArray[2] = mouseInput.left ? 1 : 0;
+    mouseArray[3] = mouseInput.right ? 1 : 0;
+    device.queue.writeBuffer(mouseInputBuffer, 0, mouseArray);
 
     // 1. Update boids with compute shader
     const computeEncoder = device.createCommandEncoder();

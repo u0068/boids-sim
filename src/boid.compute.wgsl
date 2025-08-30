@@ -12,6 +12,15 @@ struct BoidParams {
     alignmentRange: f32,
     shapeWeight: f32,
     shapeRange: f32,
+    mouseWeight: f32,
+    mouseRange: f32,
+    padding: vec2f, // padding to make size multiple of 16 bytes
+};
+
+struct MouseInput {
+    pos: vec2f,
+    leftButton: f32,
+    rightButton: f32,
 };
 
 fn cross(a: vec2f, b: vec2f) -> f32 {
@@ -21,6 +30,7 @@ fn cross(a: vec2f, b: vec2f) -> f32 {
 @group(0) @binding(0) var<storage, read_write> boids: array<Boid>;
 @group(0) @binding(1) var<uniform> canvasSize: vec2f;
 @group(0) @binding(2) var<uniform> params: BoidParams;
+@group(0) @binding(3) var<uniform> mouseInput: MouseInput;
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) id: vec3u) {
@@ -77,6 +87,14 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
         // Alignment: match velocity
         perceivedVelocity = perceivedVelocity / alignmentNeighborCount;
         boid.vel = boid.vel + (perceivedVelocity - boid.vel) * params.alignmentWeight;
+    }
+
+    // Mouse interaction
+    let mouseOffset = mouseInput.pos - boid.pos;
+    let mouseDist = length(mouseOffset);
+    let mouseInfluence = f32(mouseInput.leftButton - mouseInput.rightButton); // 1 if left button, -1 if right button, 0 if none or both
+    if (mouseDist < params.mouseRange && mouseDist > 0.0 && mouseInfluence != 0) {
+        boid.vel = boid.vel + (mouseOffset / mouseDist) * params.mouseWeight * mouseInfluence * (params.mouseRange - mouseDist) / params.mouseRange;
     }
 
 
