@@ -3,7 +3,7 @@ import boidFragWGSL from './boid.frag.wgsl?raw';
 import boidComputeWGSL from './boid.compute.wgsl?raw';
 
 // Number of boids
-const NUM_BOIDS = 30000;
+const NUM_BOIDS = 10000;
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 
